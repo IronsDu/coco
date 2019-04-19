@@ -68,10 +68,10 @@ static awaitable<void> output(asio::io_context& context)
     }
 }
 
-static awaitable<void> testRpc(asio::io_context& context)
+static awaitable<void> testRpc(asio::io_context& context, std::string ip, int port, int concurrentNum)
 {
     tcp::socket socket(context);
-    co_await socket.async_connect(asio::ip::tcp::endpoint(asio::ip::address::from_string("127.0.0.1"), 55555), asio::use_awaitable);
+    co_await socket.async_connect(asio::ip::tcp::endpoint(asio::ip::address::from_string(ip), 55555), asio::use_awaitable);
 
     auto serviceContext = InitRpcServiceContext(
         context,
@@ -84,7 +84,7 @@ static awaitable<void> testRpc(asio::io_context& context)
         serviceContext.getInInterceptor(),
         serviceContext.getOutInterceptor());
 
-    for (size_t i = 0; i < 100; i++)
+    for (size_t i = 0; i < concurrentNum; i++)
     {
         co_spawn(context, [client, &context]() {
             return benchmark(client, context);
@@ -92,19 +92,21 @@ static awaitable<void> testRpc(asio::io_context& context)
     }
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    std::cout << " [work threadnum] - [ip] - [port] - [client num] - [concurrent  num]";
+
     try
     {
-        asio::io_context io_context(1);
+        asio::io_context io_context(std::atoi(argv[1]));
 
         asio::signal_set signals(io_context, SIGINT, SIGTERM);
         signals.async_wait([&](auto, auto) { io_context.stop(); });
 
-        for (size_t i = 0; i < 200; i++)
+        for (size_t i = 0; i < std::atoi(argv[4]); i++)
         {
             co_spawn(io_context, [&]() {
-                return testRpc(io_context);
+                return testRpc(io_context, argv[2], std::atoi(argv[3]), std::atoi(argv[5]));
             }, detached);
         }
 
@@ -112,7 +114,14 @@ int main()
             return output(io_context);
         }, detached);
 
-        io_context.run();
+        for (size_t i = 0; i < std::atoi(argv[1]); i++)
+        {
+            std::thread([&io_context]() {
+                io_context.run();
+            }).detach();
+        }
+
+        std::cin.get();
     }
     catch (std::exception & e)
     {

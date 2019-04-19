@@ -60,10 +60,13 @@ private:
     asio::io_context& mContext;
 };
 
-awaitable<void> listener(asio::io_context& context)
+awaitable<void> listener(asio::io_context& context, std::string ip, int port)
 {
-    auto executor = co_await this_coro::executor;
-    tcp::acceptor acceptor(executor, { tcp::v4(), 55555 });
+    tcp::acceptor acceptor(context);
+    acceptor.open(asio::ip::tcp::endpoint(asio::ip::tcp::v4(), 0).protocol());
+    acceptor.bind(asio::ip::tcp::endpoint(asio::ip::address_v4::from_string(ip), port));
+    acceptor.listen();
+
     for (;;)
     {
         tcp::socket socket = co_await acceptor.async_accept(use_awaitable);
@@ -78,21 +81,30 @@ awaitable<void> listener(asio::io_context& context)
     }
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    std::cout << " [work threadnum] - [ip] - [port]";
+
     try
     {
-        asio::io_context io_context(1);
+        asio::io_context io_context(std::atoi(argv[1]));
 
         asio::signal_set signals(io_context, SIGINT, SIGTERM);
         signals.async_wait([&](auto, auto) { io_context.stop(); });
 
         co_spawn(io_context,
             [&]() {
-                return listener(io_context);
+                return listener(io_context, argv[2], std::atoi(argv[3]));
         }, detached);
 
-        io_context.run();
+        for (size_t i = 0; i < std::atoi(argv[1]); i++)
+        {
+            std::thread([&io_context]() {
+                io_context.run();
+            }).detach();
+        }
+
+        std::cin.get();
     }
     catch (std::exception & e)
     {
