@@ -24,6 +24,7 @@ namespace coco {
             mValidStartPos(0),
             mValidEndPos(0)
         {
+            growBuffer();
         }
 
         virtual ~StreamReceive() = default;
@@ -109,8 +110,7 @@ namespace coco {
 
             if (getValidSize() == mRemainder.size())
             {
-                const auto GrowSize = 1024;
-                mRemainder.resize(std::min(mRemainder.size() + GrowSize, mMaxBufferSize));
+                growBuffer();
             }
         }
 
@@ -127,6 +127,12 @@ namespace coco {
         char*       getValidEndData()
         {
             return (mRemainder.data() + mValidEndPos);
+        }
+
+        void        growBuffer()
+        {
+            const auto GrowSize = 1024;
+            mRemainder.resize(std::min(mRemainder.size() + GrowSize, mMaxBufferSize));
         }
 
     private:
